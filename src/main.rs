@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(abi_efiapi)]
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -7,6 +8,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-extern "C" fn efi_main() {
+extern "efiapi" fn efi_main() {
     loop {}
 }
