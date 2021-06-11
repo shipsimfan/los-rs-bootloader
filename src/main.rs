@@ -52,8 +52,10 @@ extern "efiapi" fn efi_main(image_handle: *const c_void, system_table: *const c_
 fn main() -> Result<(), uefi::Error> {
     // Load the kernel
     print!("Loading kernel . . . ");
-    let kernel = uefi::file::load_file("kernel.elf")?;
-    let _entry: KernelEntry = unsafe { core::mem::transmute(elf::load_executable(&kernel)?) };
+    let _entry: KernelEntry = {
+        let kernel = uefi::file::load_file("kernel.elf")?;
+        unsafe { core::mem::transmute(elf::load_executable(&kernel)?) }
+    };
     println!("OK!");
 
     loop {}
