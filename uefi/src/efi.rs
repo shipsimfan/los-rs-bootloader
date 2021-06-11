@@ -27,7 +27,6 @@ pub type UINT128 = u128;
 pub type CHAR8 = u8;
 pub type CHAR16 = u16;
 pub type VOID = core::ffi::c_void;
-pub type GUID = u128;
 pub type HANDLE = *const VOID;
 pub type EVENT = *const VOID;
 pub type LBA = UINT64;
@@ -36,6 +35,14 @@ pub type MAC_ADDRESS = [u8; 32];
 pub type IPv4_ADDRESS = [u8; 4];
 pub type IPv6_ADDRESS = [u8; 16];
 pub type IP_ADDRESS = [u8; 16];
+
+#[repr(C)]
+pub struct GUID {
+    a: u32,
+    b: u16,
+    c: u16,
+    d: [u8; 8],
+}
 
 /*
  * ================================================================
@@ -106,7 +113,7 @@ pub struct BOOT_SERVICES {
     pub install_protocol_interface: *const VOID,
     pub reinstall_protocol_interface: *const VOID,
     pub uninstall_protocol_interface: *const VOID,
-    pub handle_protocol: *const VOID,
+    pub handle_protocol: HANDLE_PROTOCOL,
     pub reserved: *const VOID,
     pub register_protocol_notify: *const VOID,
     pub locate_handle: *const VOID,
@@ -138,7 +145,7 @@ pub struct BOOT_SERVICES {
     // 32-Bit CRC services
     pub calculate_crc32: *const VOID,
     // Miscellaneous services
-    pub copy_mem: *const VOID,
+    pub copy_mem: COPY_MEM,
     pub set_mem: *const VOID,
     pub create_event_ex: *const VOID,
 }
@@ -158,6 +165,7 @@ pub enum ALLOCATE_TYPE {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub enum MEMORY_TYPE {
     ReservedMemoryType,
     LoaderCode,
@@ -227,6 +235,18 @@ pub type FREE_POOL = unsafe extern "efiapi" fn(buffer: *const VOID) -> STATUS;
 
 /*
  * ================================================================
+ * || 7.3 Protocol Handler Services
+ * ================================================================
+ */
+
+pub type HANDLE_PROTOCOL = unsafe extern "efiapi" fn(
+    handle: HANDLE,
+    protocol: *const GUID,
+    interface: *mut *const VOID,
+) -> STATUS;
+
+/*
+ * ================================================================
  * || 7.5 Miscellaneous Boot Services
  * ================================================================
  */
@@ -238,13 +258,76 @@ pub type SET_WATCHDOG_TIMER = unsafe extern "efiapi" fn(
     watchdog_data: *const CHAR16,
 ) -> STATUS;
 
+pub type COPY_MEM =
+    unsafe extern "efiapi" fn(destination: *mut VOID, source: *const VOID, length: UINTN);
+
+/*
+ * ================================================================
+ * || 8.3 Time Services
+ * ================================================================
+ */
+
+#[repr(C)]
+pub struct TIME {
+    year: UINT16,
+    month: UINT8,
+    day: UINT8,
+    hour: UINT8,
+    minute: UINT8,
+    second: UINT8,
+    pad1: UINT8,
+    nanosecond: UINT32,
+    time_zone: INT16,
+    daylight: UINT8,
+    pad2: UINT8,
+}
+
+/*
+ * ================================================================
+ * || 9.1 EFI Loaded Image Protocol
+ * ================================================================
+ */
+
+pub const LOADED_IMAGE_PROTOCOL_GUID: GUID = GUID {
+    a: 0x5B1B31A1,
+    b: 0x9562,
+    c: 0x11D2,
+    d: [0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
+};
+
+#[repr(C)]
+pub struct LOADED_IMAGE_PROTOCOL {
+    pub revision: UINT32,
+    pub parent_handle: HANDLE,
+    pub system_table: *const SYSTEM_TABLE,
+    // Source location of the image
+    pub device_handle: HANDLE,
+    pub file_path: *const VOID,
+    pub reserved: *const VOID,
+    // Image's load options
+    pub load_options_size: UINT32,
+    pub load_options: *const VOID,
+    // Location where image was loaded
+    pub image_base: *const VOID,
+    pub image_size: UINT64,
+    pub image_code_type: MEMORY_TYPE,
+    pub image_data_type: MEMORY_TYPE,
+    pub unload: *const VOID,
+}
+
 /*
  * ================================================================
  * || 12.4 Simple Text Output Protocol
  * ================================================================
  */
 
-const SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID: GUID = 0x387477C2_69C7_11D2_8E_39_00_A0_C9_69_72_3B;
+const SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID: GUID = GUID {
+    a: 0x387477C2,
+    b: 0x69C7,
+    c: 0x11D2,
+    d: [0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
+};
+
 #[repr(C)]
 pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
     pub reset: *const VOID,
@@ -273,12 +356,111 @@ pub type TEXT_SET_CURSOR_POSITION = unsafe extern "efiapi" fn(
 
 /*
  * ================================================================
+ * || 13.4 Simple File System Protocol
+ * ================================================================
+ */
+
+pub const SIMPLE_FILE_SYSTEM_PROTOCOL_GUID: GUID = GUID {
+    a: 0x0964E5B22,
+    b: 0x6459,
+    c: 0x11D2,
+    d: [0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
+};
+
+pub struct SIMPLE_FILE_SYSTEM_PROTOCOL {
+    pub revision: UINT64,
+    pub open_volume: SIMPLE_FILE_SYSTEM_OPEN_VOLUME,
+}
+
+pub type SIMPLE_FILE_SYSTEM_OPEN_VOLUME = unsafe extern "efiapi" fn(
+    this: *const SIMPLE_FILE_SYSTEM_PROTOCOL,
+    root: *mut *const FILE_PROTOCOL,
+) -> STATUS;
+
+/*
+ * ================================================================
+ * || 13.5 File Protocol
+ * ================================================================
+ */
+
+pub const FILE_MODE_READ: UINT64 = 1;
+pub const FILE_MODE_WRITE: UINT64 = 2;
+pub const FILE_MODE_CREATE: UINT64 = 0x8000000000000000;
+
+pub const FILE_READ_ONLY: UINT64 = 0x1;
+pub const FILE_HIDDEN: UINT64 = 0x2;
+pub const FILE_SYSTEM: UINT64 = 0x4;
+pub const FILE_RESERVED: UINT64 = 0x8;
+pub const FILE_DIRECTORY: UINT64 = 0x10;
+pub const FILE_ARCHIVE: UINT64 = 0x20;
+pub const FILE_VALID_ATTR: UINT64 = 0x37;
+
+pub const FILE_INFO_ID: GUID = GUID {
+    a: 0x09576E92,
+    b: 0x6D3F,
+    c: 0x11D2,
+    d: [0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
+};
+
+#[repr(C)]
+pub struct FILE_PROTOCOL {
+    pub revision: UINT64,
+    pub open: FILE_OPEN,
+    pub close: FILE_CLOSE,
+    pub delete: *const VOID,
+    pub read: FILE_READ,
+    pub write: *const VOID,
+    pub get_position: *const VOID,
+    pub set_position: *const VOID,
+    pub get_info: FILE_GET_INFO,
+    pub set_info: *const VOID,
+    pub flush: *const VOID,
+    pub open_ex: *const VOID,
+    pub read_ex: *const VOID,
+    pub write_ex: *const VOID,
+    pub flush_ex: *const VOID,
+}
+
+#[repr(C)]
+pub struct FILE_INFO {
+    pub size: UINT64,
+    pub file_size: UINT64,
+    pub physical_size: UINT64,
+    pub create_time: TIME,
+    pub last_access_time: TIME,
+    pub modification_time: TIME,
+    pub attribute: UINT64,
+    pub filename: CHAR16,
+}
+
+pub type FILE_OPEN = unsafe extern "efiapi" fn(
+    this: *const FILE_PROTOCOL,
+    new_handle: *mut *const FILE_PROTOCOL,
+    file_name: *const CHAR16,
+    open_mode: UINT64,
+    attributes: UINT64,
+) -> STATUS;
+pub type FILE_CLOSE = unsafe extern "efiapi" fn(this: *const FILE_PROTOCOL) -> STATUS;
+pub type FILE_GET_INFO = unsafe extern "efiapi" fn(
+    this: *const FILE_PROTOCOL,
+    information_type: *const GUID,
+    buffer_size: *mut UINTN,
+    buffer: *mut VOID,
+) -> STATUS;
+pub type FILE_READ = unsafe extern "efiapi" fn(
+    this: *const FILE_PROTOCOL,
+    buffer_size: *mut UINTN,
+    buffer: *mut VOID,
+) -> STATUS;
+
+/*
+ * ================================================================
  * || Appendix D - Status Codes
  * ================================================================
  */
 
 pub const fn ERROR(code: UINTN) -> UINTN {
-    0x800000000000000 | code
+    0x8000000000000000 | code
 }
 
 #[repr(usize)]
@@ -325,4 +507,57 @@ pub enum STATUS {
     COMPROMISED_DATA = ERROR(33),
     IP_ADDRESS_CONFLICT = ERROR(34),
     HTTP_ERROR = ERROR(35),
+}
+
+impl core::fmt::Display for STATUS {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{} ({:#X})",
+            match self {
+                STATUS::SUCCESS => "Success",
+                STATUS::WARN_UNKOWN_GLYPH => "Unknown Glyph",
+                STATUS::WARN_DELETE_FAILURE => "Delete Failure",
+                STATUS::WARN_WRITE_FAILURE => "Write Failure",
+                STATUS::WARN_BUFFER_TOO_SMALL => "Buffer Too Small",
+                STATUS::WARN_STALE_DATA => "Stale Data",
+                STATUS::WARN_FILE_SYSTEM => "File System",
+                STATUS::WARN_RESET_REQUIRED => "Reset Required",
+                STATUS::LOAD_ERROR => "Load Error",
+                STATUS::INVALID_PARAMETER => "Invalid Parameter",
+                STATUS::UNSUPPORTED => "Unsupported",
+                STATUS::BAD_BUFFER_SIZE => "Bad Buffer Size",
+                STATUS::BUFFER_TOO_SMALL => "Buffer Too Small",
+                STATUS::NOT_READY => "Not Ready",
+                STATUS::DEVICE_ERROR => "Device Error",
+                STATUS::WRITE_PROTECTED => "Write Protected",
+                STATUS::OUT_OF_RESOURCES => "Out of Resources",
+                STATUS::VOLUME_CORRUPTED => "Volume Corrupted",
+                STATUS::VOLUME_FULL => "Volume Full",
+                STATUS::NO_MEDIA => "No Media",
+                STATUS::MEDIA_CHANGED => "Media Changed",
+                STATUS::NOT_FOUND => "Not Found",
+                STATUS::ACCESS_DENIED => "Access Denied",
+                STATUS::NO_RESPONSE => "No Response",
+                STATUS::NO_MAPPING => "No Mapping",
+                STATUS::TIMEOUT => "Timeout",
+                STATUS::NOT_STARTED => "Not Started",
+                STATUS::ALREADY_STARTED => "Already Started",
+                STATUS::ABORTED => "Aborted",
+                STATUS::ICMP_ERROR => "ICMP Error",
+                STATUS::TFTP_ERROR => "TFTP Error",
+                STATUS::PROTOCOL_ERROR => "Protocol Error",
+                STATUS::INCOMPATIBLE_VERSION => "Incompatible Version",
+                STATUS::SECURITY_VIOLATION => "Security Violation",
+                STATUS::CRC_ERROR => "CRC Error",
+                STATUS::END_OF_MEDIA => "End of Media",
+                STATUS::END_OF_FILE => "End of File",
+                STATUS::INVALID_LANGUAGE => "Invalid Language",
+                STATUS::COMPROMISED_DATA => "Compromised Data",
+                STATUS::IP_ADDRESS_CONFLICT => "IP Address Conflict",
+                STATUS::HTTP_ERROR => "HTTP Error",
+            },
+            *self as usize
+        )
+    }
 }

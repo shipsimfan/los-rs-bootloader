@@ -8,16 +8,11 @@ pub struct Console(
 );
 
 static mut STANDARD_OUTPUT: Option<Console> = None;
-static mut STANDARD_ERROR: Option<Console> = None;
 
 pub fn initialize(system_table: &efi::SYSTEM_TABLE) -> Result<(), crate::Error> {
     let stdout = Console::new(system_table.console_out)?;
-    let stderr = Console::new(system_table.standard_error)?;
 
-    unsafe {
-        STANDARD_OUTPUT = Some(stdout);
-        STANDARD_ERROR = Some(stderr);
-    }
+    unsafe { STANDARD_OUTPUT = Some(stdout) };
 
     Ok(())
 }
@@ -25,14 +20,6 @@ pub fn initialize(system_table: &efi::SYSTEM_TABLE) -> Result<(), crate::Error> 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     match unsafe { &mut STANDARD_OUTPUT } {
-        None => {}
-        Some(console) => console.write_fmt(args).unwrap(),
-    }
-}
-
-#[doc(hidden)]
-pub fn _eprint(args: fmt::Arguments) {
-    match unsafe { &mut STANDARD_ERROR } {
         None => {}
         Some(console) => console.write_fmt(args).unwrap(),
     }
@@ -57,7 +44,7 @@ impl Console {
         let status = unsafe { (self.0.clear_screen)(self.1) };
         match status {
             efi::STATUS::SUCCESS => Ok(()),
-            _ => Err(crate::Error(status)),
+            _ => Err(crate::Error::new(status, "Failed to clear standard output")),
         }
     }
 
@@ -65,7 +52,7 @@ impl Console {
         let status = unsafe { (self.0.set_cursor_pos)(self.1, column, row) };
         match status {
             efi::STATUS::SUCCESS => Ok(()),
-            _ => Err(crate::Error(status)),
+            _ => Err(crate::Error::new(status, "Failed to clear standard error")),
         }
     }
 }
@@ -94,17 +81,6 @@ macro_rules! print {
 
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! eprint {
-    ($($arg:tt)*) => ($crate::console::_eprint(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! eprintln {
-    () => ($crate::eprint!("\n"));
-    ($($arg:tt)*) => ($crate::eprint!("{}\n", format_args!($($arg)*)));
+    () => ($crate::print!("\r\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
 }
