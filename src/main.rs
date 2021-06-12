@@ -58,12 +58,31 @@ fn main() -> Result<(), uefi::Error> {
     };
     println!("OK!");
 
-    loop {}
+    // Get the graphics mode info
+    print!("Getting video mode information . . . ");
+    println!("OK!");
+
+    // Get the ACPI RSDP
+    print!("Getting the ACPI RSDP . . . ");
+    println!("OK!");
+
+    // Get memory info
+    print!("Getting memory information . . . ");
+    println!("OK!");
+
+    // Exit boot services and launch kernel
+    println!("Launching the kernel . . . ");
+
+    loop {
+        unsafe { asm!("hlt") };
+    }
 }
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     uefi::println!("{}", info);
 
-    loop {}
+    loop {
+        unsafe { asm!("hlt") };
+    }
 }
