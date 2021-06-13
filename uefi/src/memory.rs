@@ -1,4 +1,4 @@
-use crate::{efi, println};
+use crate::efi;
 use core::{
     alloc::{GlobalAlloc, Layout},
     ffi::c_void,
