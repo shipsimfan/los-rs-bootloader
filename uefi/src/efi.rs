@@ -37,11 +37,12 @@ pub type IPv6_ADDRESS = [u8; 16];
 pub type IP_ADDRESS = [u8; 16];
 
 #[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct GUID {
-    a: u32,
-    b: u16,
-    c: u16,
-    d: [u8; 8],
+    pub a: u32,
+    pub b: u16,
+    pub c: u16,
+    pub d: [u8; 8],
 }
 
 /*
@@ -80,7 +81,7 @@ pub struct SYSTEM_TABLE {
     pub runtime_services: *const VOID,
     pub boot_services: *const BOOT_SERVICES,
     pub number_of_table_entries: UINTN,
-    pub configuration_table: *const VOID,
+    pub configuration_table: *const CONFIGURATION_TABLE,
 }
 
 /*
@@ -124,7 +125,7 @@ pub struct BOOT_SERVICES {
     pub start_image: *const VOID,
     pub exit: *const VOID,
     pub unload_image: *const VOID,
-    pub exit_boot_services: *const VOID,
+    pub exit_boot_services: EXIT_BOOT_SERVICES,
     // Miscellaneous Services
     pub get_next_montonic_count: *const VOID,
     pub stall: *const VOID,
@@ -139,7 +140,7 @@ pub struct BOOT_SERVICES {
     // Library Services
     pub protocols_per_handle: *const VOID,
     pub locate_handle_buffer: *const VOID,
-    pub locate_protocol: *const VOID,
+    pub locate_protocol: LOCATE_PROTOCOL,
     pub install_multiple_protocol_interfaces: *const VOID,
     pub uninstall_multiple_protocol_interfaces: *const VOID,
     // 32-Bit CRC services
@@ -148,6 +149,18 @@ pub struct BOOT_SERVICES {
     pub copy_mem: COPY_MEM,
     pub set_mem: *const VOID,
     pub create_event_ex: *const VOID,
+}
+
+/*
+ * ================================================================
+ * || 4.6 EFI Configuration Table and Properties Table
+ * ================================================================
+ */
+
+#[repr(C)]
+pub struct CONFIGURATION_TABLE {
+    pub vendor_guid: GUID,
+    pub vendor_table: *const VOID,
 }
 
 /*
@@ -223,8 +236,8 @@ pub type GET_MEMORY_MAP = unsafe extern "efiapi" fn(
     memory_map_size: *mut UINTN,
     memory_map: *mut MEMORY_DESCRIPTOR,
     map_key: *mut UINTN,
-    descriptor_size: UINTN,
-    descriptor_size: UINT32,
+    descriptor_size: *mut UINTN,
+    descriptor_size: *mut UINT32,
 ) -> STATUS;
 pub type ALLOCATE_POOL = unsafe extern "efiapi" fn(
     pool_type: MEMORY_TYPE,
@@ -244,6 +257,21 @@ pub type HANDLE_PROTOCOL = unsafe extern "efiapi" fn(
     protocol: *const GUID,
     interface: *mut *const VOID,
 ) -> STATUS;
+
+pub type LOCATE_PROTOCOL = unsafe extern "efiapi" fn(
+    protocol: *const GUID,
+    registration: *const VOID,
+    interface: *mut *const VOID,
+) -> STATUS;
+
+/*
+ * ================================================================
+ * || 7.4 Image Services
+ * ================================================================
+ */
+
+pub type EXIT_BOOT_SERVICES =
+    unsafe extern "efiapi" fn(image_handle: HANDLE, map_key: UINTN) -> STATUS;
 
 /*
  * ================================================================
@@ -353,6 +381,65 @@ pub type TEXT_SET_CURSOR_POSITION = unsafe extern "efiapi" fn(
     column: UINTN,
     row: UINTN,
 ) -> STATUS;
+
+/*
+ * ================================================================
+ * || 12.9 Graphics Output Protocol
+ * ================================================================
+ */
+
+pub const GRAPHICS_OUTPUT_PROTOCOL_GUID: GUID = GUID {
+    a: 0x9042A9DE,
+    b: 0x23DC,
+    c: 0x4A38,
+    d: [0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A],
+};
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum GRAPHICS_PIXEL_FORMAT {
+    PixelRedGreenBlueReserved8BitPerColor,
+    PixelBlueGreenRedReserved8BitPerColor,
+    PixelBitMask,
+    PixelBltOnly,
+    PixelFormatMax,
+}
+
+#[repr(C)]
+pub struct GRAPHICS_OUTPUT_PROTOCOL {
+    pub query_mode: *const VOID,
+    pub set_mode: *const VOID,
+    pub blt: *const VOID,
+    pub mode: *const GRAPHICS_OUTPUT_PROTOCOL_MODE,
+}
+
+#[repr(C)]
+pub struct GRAPHICS_OUTPUT_MODE_INFORMATION {
+    pub version: UINT32,
+    pub horizontal_resolution: UINT32,
+    pub vertical_resolution: UINT32,
+    pub pixel_format: GRAPHICS_PIXEL_FORMAT,
+    pub pixel_information: PIXEL_BITMASK,
+    pub pixels_per_scanline: UINT32,
+}
+
+#[repr(C)]
+pub struct PIXEL_BITMASK {
+    pub red_mask: UINT32,
+    pub green_mask: UINT32,
+    pub blue_mask: UINT32,
+    pub reserved: UINT32,
+}
+
+#[repr(C)]
+pub struct GRAPHICS_OUTPUT_PROTOCOL_MODE {
+    pub max_mode: UINT32,
+    pub mode: UINT32,
+    pub info: *const GRAPHICS_OUTPUT_MODE_INFORMATION,
+    pub size_of_info: UINTN,
+    pub framebuffer_base: PHYSICAL_ADDRESS,
+    pub framebuffer_size: UINTN,
+}
 
 /*
  * ================================================================

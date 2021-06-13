@@ -4,9 +4,11 @@
 
 use core::{ffi::c_void, ptr::null};
 
+pub mod config_table;
 pub mod console;
 mod efi;
 pub mod file;
+pub mod graphics;
 pub mod memory;
 
 extern crate alloc;
@@ -17,6 +19,9 @@ pub struct Error {
     status: Status,
     message: &'static str,
 }
+
+static mut IMAGE_HANDLE: *const efi::VOID = null();
+static mut EXIT_BOOT_SERVICES: Option<efi::EXIT_BOOT_SERVICES> = None;
 
 pub fn initialize(
     system_table: *const c_void,
@@ -32,6 +37,11 @@ pub fn initialize(
         return Err(Error::new(status, "Failed to set watchdog timer"));
     }
 
+    unsafe {
+        IMAGE_HANDLE = image_handle;
+        EXIT_BOOT_SERVICES = Some(boot_services.exit_boot_services);
+    }
+
     // Initialize the memory
     memory::initialize(boot_services);
 
@@ -41,8 +51,32 @@ pub fn initialize(
     // Initialize the file interface
     file::initialize(boot_services, image_handle)?;
 
+    // Initialize graphics info
+    graphics::initialize(boot_services);
+
+    // Initialize configuration tables
+    config_table::initialize(system_table);
+
     // Enter the program
     entry()
+}
+
+pub fn exit_boot_services(map_key: usize) -> Result<(), Error> {
+    unsafe {
+        match EXIT_BOOT_SERVICES {
+            None => Err(Error::new(
+                efi::STATUS::NOT_READY,
+                "Failed to exit boot services",
+            )),
+            Some(exit_boot_services) => {
+                let status = exit_boot_services(IMAGE_HANDLE, map_key);
+                match status {
+                    efi::STATUS::SUCCESS => Ok(()),
+                    _ => Err(Error::new(status, "Failed to exit boot services")),
+                }
+            }
+        }
+    }
 }
 
 fn from_pointer<T>(ptr: *const T) -> &'static T {
