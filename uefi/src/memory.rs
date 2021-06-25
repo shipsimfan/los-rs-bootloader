@@ -97,34 +97,44 @@ pub fn get_memory_map() -> Result<MemoryMap, crate::Error> {
                 let mut key = 0;
                 let mut desc_size = 0;
                 let mut desc_version = 0;
-                let status =
-                    get_memory_map(&mut size, addr, &mut key, &mut desc_size, &mut desc_version);
-                if status != efi::STATUS::BUFFER_TOO_SMALL {
-                    return Err(crate::Error::new(status, "Failed to get memory map"));
-                }
 
-                let allocate_pool = ALLOCATOR.allocate.unwrap();
-                let status = allocate_pool(
-                    efi::MEMORY_TYPE::LoaderData,
-                    size,
-                    &mut addr as *mut *mut _ as *mut *const _,
-                );
-                if status != efi::STATUS::SUCCESS {
-                    return Err(crate::Error::new(status, "Failed to get memory map"));
-                }
+                loop {
+                    let status = get_memory_map(
+                        &mut size,
+                        addr,
+                        &mut key,
+                        &mut desc_size,
+                        &mut desc_version,
+                    );
+                    if status == efi::STATUS::SUCCESS {
+                        return Ok(MemoryMap {
+                            size: size,
+                            key: key,
+                            address: addr,
+                            desc_size: desc_size,
+                            desc_version: desc_version,
+                        });
+                    } else if status != efi::STATUS::BUFFER_TOO_SMALL {
+                        return Err(crate::Error::new(status, "Failed to get memory map"));
+                    }
 
-                let status =
-                    get_memory_map(&mut size, addr, &mut key, &mut desc_size, &mut desc_version);
+                    if addr != null_mut() {
+                        let free_pool = ALLOCATOR.free.unwrap();
+                        let status = free_pool(addr as *const _);
+                        if status != efi::STATUS::SUCCESS {
+                            return Err(crate::Error::new(status, "Failed to get memory map"));
+                        }
+                    }
 
-                match status {
-                    efi::STATUS::SUCCESS => Ok(MemoryMap {
-                        size: size,
-                        key: key,
-                        address: addr,
-                        desc_size: desc_size,
-                        desc_version: desc_version,
-                    }),
-                    _ => Err(crate::Error::new(status, "Failed to get memory map")),
+                    let allocate_pool = ALLOCATOR.allocate.unwrap();
+                    let status = allocate_pool(
+                        efi::MEMORY_TYPE::LoaderData,
+                        size,
+                        &mut addr as *mut *mut _ as *mut *const _,
+                    );
+                    if status != efi::STATUS::SUCCESS {
+                        return Err(crate::Error::new(status, "Failed to get memory map"));
+                    }
                 }
             }
         }
