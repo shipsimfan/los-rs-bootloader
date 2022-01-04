@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(asm)]
 #![feature(abi_efiapi)]
 
 use core::ffi::c_void;
@@ -55,7 +54,7 @@ fn main() -> Result<(), uefi::Error> {
     entry(&graphics_info, &mmap, rsdp);
 
     loop {
-        unsafe { asm!("hlt") };
+        unsafe { core::arch::asm!("hlt") };
     }
 }
 
@@ -64,6 +63,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     uefi::println!("{}", info);
 
     loop {
-        unsafe { asm!("hlt") };
+        unsafe { core::arch::asm!("hlt") };
     }
 }
