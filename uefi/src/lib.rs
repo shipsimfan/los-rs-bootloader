@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(abi_efiapi)]
 #![feature(alloc_error_handler)]
 
 use core::{ffi::c_void, ptr::null};
